@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 #include <thread>
+#include <sstream>
+#include <algorithm>
 #include "console_renderer.h"
 
 
@@ -14,13 +16,24 @@ struct Position
 	{
 		return x == other.x && y == other.y;
 	}
+	Position& operator+=(const Position& other)
+	{
+		x += other.x;
+		y += other.y;
+		return *this;
+	}
+	Position operator+(const Position& other) const
+	{
+		return { x + other.x, y + other.y };
+	}
 };
 
 struct GameState
 {
-	char map[screen_width][screen_height];
+	std::vector<std::vector<char>> map;
 	std::vector<Position> snake;
 	Position foodPosition;
+	Position moveDirection{ 0, -1 };
 	bool gameOver = false;
 	int score = 0;
 };
@@ -31,14 +44,24 @@ struct InputState
 	bool down = false;
 	bool left = false;
 	bool right = false;
+
+	bool operator==(const InputState& other) const
+	{
+		return up == other.up && down == other.down && left == other.left && right == other.right;
+	}
 };
 
 
+void GameOver(const GameState& gameState);
+
 void SpawnFood(GameState& gameState)
 {
+	int mapWidth = gameState.map.size();
+	int mapHeight = gameState.map[0].size();
+
 	Position newFoodPosition;
-	newFoodPosition.x = rand() % (screen_width - 2);
-	newFoodPosition.y = rand() % (screen_height - 2);
+	newFoodPosition.x = rand() % (mapWidth - 2);
+	newFoodPosition.y = rand() % (mapHeight - 2);
 	gameState.foodPosition = newFoodPosition;
 }
 
@@ -85,140 +108,243 @@ void CheckCollision(GameState& gameState)
 
 void Input(InputState& input)
 {
+	InputState newInput = {false,false,false,false};
+
 	if (getIfBasicKeyIsCurrentlyDown('W'))
 	{
-		input.up = true;
-		input.down = false;
-		input.left = false;
-		input.right = false;
+		newInput.up = true;
 	}
-	else if (getIfBasicKeyIsCurrentlyDown('S'))
+	if (getIfBasicKeyIsCurrentlyDown('S'))
 	{
-		input.up = false;
-		input.down = true;
-		input.left = false;
-		input.right = false;
+		newInput.down = true;
 	}
-	else if (getIfBasicKeyIsCurrentlyDown('A'))
+	if (getIfBasicKeyIsCurrentlyDown('A'))
 	{
-		input.up = false;
-		input.down = false;
-		input.left = true;
-		input.right = false;
+		newInput.left = true;
 	}
-	else if (getIfBasicKeyIsCurrentlyDown('D'))
+	if (getIfBasicKeyIsCurrentlyDown('D'))
 	{
-		input.up = false;
-		input.down = false;
-		input.left = false;
-		input.right = true;
+		newInput.right = true;
+	}
+	if (newInput != input) 
+	{
+		input = newInput;
 	}
 }
 
-void Logic(InputState input, GameState& gamestate)
+void Logic(InputState input, GameState& gameState)
 {
-	MoveSnake(gamestate);
-	if (input.up)
-	{
-		gamestate.snake[0].y -= 1;
-	}
-	else if (input.down)
-	{
-		gamestate.snake[0].y += 1;
-	}
-	else if (input.left)
-	{
-		gamestate.snake[0].x -= 1;
-	}
-	else if (input.right)
-	{
-		gamestate.snake[0].x += 1;
-	}
-	CheckCollision(gamestate);
-}
+	MoveSnake(gameState);
 
-void Render(const GameState& gamestate)
-{
-	for (int x = 0; x < screen_width; x++)
+	if (input.up || input.down || input.left || input.right)
 	{
-		for (int y = 0; y < screen_height; y++)
+		Position previousDirection = gameState.moveDirection;
+		Position zero{ 0, 0 };
+		gameState.moveDirection = { 0, 0 };
+		if (input.up)
 		{
-				drawTile(x, y, gamestate.map[x][y]);
+			gameState.moveDirection.y =  -1;
+		}
+		else if (input.down)
+		{
+			gameState.moveDirection.y = 1;
+		}
+		if (input.left)
+		{
+			gameState.moveDirection.x = -1;
+		}
+		else if (input.right)
+		{
+			gameState.moveDirection.x = 1;
+		}
+		if (gameState.moveDirection == zero || gameState.moveDirection + previousDirection == zero)
+		{
+			gameState.moveDirection = previousDirection;
 		}
 	}
-	drawTile(gamestate.foodPosition.x, gamestate.foodPosition.y, '*');
-	drawTile(gamestate.snake[0].x, gamestate.snake[0].y, '@');
-	for (int i = 1; i < gamestate.snake.size(); i++)
+	gameState.snake[0] += gameState.moveDirection;
+
+	CheckCollision(gameState);
+}
+
+void Render(const GameState& gameState)
+{
+	int mapWidth = gameState.map.size();
+	int mapHeight = gameState.map[0].size();
+	std::string score = "Snake Game - Score: " + std::to_string(gameState.score);
+
+	drawString(mapWidth + 3, 3, score);
+
+	for (int x = 0; x < mapWidth; x++)
 	{
-		drawTile(gamestate.snake[i].x, gamestate.snake[i].y, 'o');
+		for (int y = 0; y < mapHeight; y++)
+		{
+				drawTile(x, y, gameState.map[x][y]);
+		}
+	}
+	drawTile(gameState.foodPosition.x, gameState.foodPosition.y, '*', FOREGROUND_RED);
+	drawTile(gameState.snake[0].x, gameState.snake[0].y, '@', FOREGROUND_GREEN);
+	for (int i = 1; i < gameState.snake.size(); i++)
+	{
+		drawTile(gameState.snake[i].x, gameState.snake[i].y, 'o');
 	}
 	renderBuffer();
 }
 
-void MakeMap(GameState& gamestate)
+void MakeMap(GameState& gameState, int level)
 {
-	for (int x = 0; x < screen_width; x++)
+	int obstacleCount = 0;
+	int mapWidth = gameState.map.size();
+	int mapHeight = gameState.map[0].size();
+
+	if (level > 1)
 	{
-		for (int y = 0; y < screen_height; y++)
+		obstacleCount = level * 5;
+	}
+
+	std::vector<Position> obstacles;
+	for (int i = 0; i < obstacleCount; i++)
+	{
+		Position obstacle;
+		obstacle.x = rand() % (mapWidth - 2);
+		obstacle.y = rand() % (mapHeight - 2);
+		obstacles.push_back(obstacle);
+	}
+
+	for (int x = 0; x < mapWidth; x++)
+	{
+		for (int y = 0; y < mapHeight; y++)
 		{
-			if (x == 0 || x == screen_width - 1 || y == 0 || y == screen_height - 1)
+			if (x == 0 || x == mapWidth - 1 || y == 0 || y == mapHeight - 1)
 			{
-				gamestate.map[x][y] = '#';
+				gameState.map[x][y] = '#';
+			}
+			else if (std::find(obstacles.begin(), obstacles.end(), Position{ x, y }) != obstacles.end())
+			{
+				gameState.map[x][y] = '#';
 			}
 			else
 			{
-				gamestate.map[x][y] = ' ';
+				gameState.map[x][y] = ' ';
 			}
 		}
 	}
 }
 
-
 void GameLoop(InputState& input, GameState& gameState)
 {
+	int logicTPS = 10;
+	int logicTickDuration = 1000 / logicTPS;
+	int msSinceLogicTick = 0;
 	while (!gameState.gameOver)
 	{
 		Input(input);
-		Logic(input, gameState);
+		if (msSinceLogicTick >= logicTickDuration)
+		{
+			msSinceLogicTick -= logicTickDuration;
+			Logic(input, gameState);
+		}
 		Render(gameState);
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		msSinceLogicTick += 10;
 	}
+}
+
+void StartGame(int level)
+{
+	setupCustomConsole();
+	InputState input;
+	GameState gameState;
+	int mapWidth = 80;
+	int mapHeight = 25;
+	gameState.map.resize(mapWidth, std::vector<char>(mapHeight, ' '));
+	MakeMap(gameState, level);
+	SpawnFood(gameState);
+	gameState.snake.push_back({ mapWidth / 2, mapHeight / 2 });
+	GameLoop(input, gameState);
+	GameOver(gameState);
+}
+
+void GameOver(const GameState& gameState)
+{
+	clearBuffer();
+	deleteCustomConsole();
+	std::cout << "Game Over! Your score: " << gameState.score << std::endl;
+	std::cout << "Enter level <level> to play again or quit to close the game." << std::endl;
+
+
+	int level = 1;
+	while (true)
+	{
+		std::string command;
+		std::getline(std::cin, command);
+		std::transform(command.begin(), command.end(), command.begin(), ::toupper);
+		std::istringstream stringStream(command);
+		std::vector<std::string> words;
+		std::string word;
+		while (stringStream >> word)
+		{
+			words.push_back(word);
+		}
+		if (words.empty())
+		{
+			std::cout << "No command entered" << std::endl;
+		}
+		else if (words[0] == "QUIT")
+		{
+			exit(0);
+		}
+		else if (words[0] == "LEVEL")
+		{
+			if (words.size() > 1)
+			{
+				try
+				{
+					level = std::stoi(words[1]);
+				}
+				catch (const std::exception& e)
+				{
+					std::cout << "Invalid level specified. Defaulting to level 1.." << std::endl;
+				}
+				break;
+			}
+		}
+	}
+	std::cout << std::endl;
+	StartGame(level);
 }
 
 int main(int n, char* args[])
 {
 	int level = 1;
-	setupCustomConsole();
 	if (n > 1)
 	{
 		std::string arg = args[1];
-		if (arg == "level1")
+		if (arg == "level")
 		{
-			level = 1;
-		}
-		else if (arg == "level2")
-		{
-			level = 2;
-		}
-		else if (arg == "level3")
-		{
-			level = 3;
+			if (n > 2)
+			{
+				try
+				{
+					level = std::stoi(args[2]);
+				}
+				catch (const std::exception& e)
+				{
+					std::cout << "Invalid level specified. Defaulting to level 1." << std::endl;
+				}
+			}
+			else
+			{
+				std::cout << "No level specified. Defaulting to level 1." << std::endl;
+			}
 		}
 		else
 		{
-			std::cout << "Invalid level argument, defaulting to level 1" << std::endl;
-			level = 1;
-			std::cout << "Usage: " << args[0] << " [level1|level2|level3]" << std::endl;
-			std::cout << "Example: " << args[0] << " level2" << std::endl;
+			std::cout << "Unknown argument: " << arg << ". Defaulting to level 1." << std::endl;
 		}
 	}
 	std::cout << "Selected level: " << level << std::endl;
 	
-
-	InputState input;
-	GameState gameState;
-	MakeMap(gameState);
-	SpawnFood(gameState);
-	gameState.snake.push_back({ screen_width / 2, screen_height / 2 });
-	GameLoop(input, gameState);
+	StartGame(level);
 }
