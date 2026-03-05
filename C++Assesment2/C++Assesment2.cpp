@@ -12,6 +12,7 @@ struct Position
 {
 	int x;
 	int y;
+
 	bool operator==(const Position& other) const
 	{
 		return x == other.x && y == other.y;
@@ -40,7 +41,7 @@ struct GameState
 
 struct InputState
 {
-	bool up = true;
+	bool up = false;
 	bool down = false;
 	bool left = false;
 	bool right = false;
@@ -54,6 +55,46 @@ struct InputState
 
 void GameOver(const GameState& gameState);
 
+void MakeMap(GameState& gameState, int level)
+{
+	int obstacleCount = 0;
+	int mapWidth = gameState.map.size();
+	int mapHeight = gameState.map[0].size();
+
+	if (level > 1)
+	{
+		obstacleCount = level * 5;
+	}
+
+	std::vector<Position> obstacles;
+	for (int i = 0; i < obstacleCount; i++)
+	{
+		Position obstacle;
+		obstacle.x = rand() % (mapWidth - 2);
+		obstacle.y = rand() % (mapHeight - 2);
+		obstacles.push_back(obstacle);
+	}
+
+	for (int x = 0; x < mapWidth; x++)
+	{
+		for (int y = 0; y < mapHeight; y++)
+		{
+			if (x == 0 || x == mapWidth - 1 || y == 0 || y == mapHeight - 1)
+			{
+				gameState.map[x][y] = '#';
+			}
+			else if (std::find(obstacles.begin(), obstacles.end(), Position{ x, y }) != obstacles.end())
+			{
+				gameState.map[x][y] = '#';
+			}
+			else
+			{
+				gameState.map[x][y] = ' ';
+			}
+		}
+	}
+}
+
 void SpawnFood(GameState& gameState)
 {
 	int mapWidth = gameState.map.size();
@@ -62,6 +103,11 @@ void SpawnFood(GameState& gameState)
 	Position newFoodPosition;
 	newFoodPosition.x = rand() % (mapWidth - 2);
 	newFoodPosition.y = rand() % (mapHeight - 2);
+	while (gameState.map[newFoodPosition.x][newFoodPosition.y] == '#' || std::find(gameState.snake.begin(), gameState.snake.end(), newFoodPosition) != gameState.snake.end())
+	{
+		newFoodPosition.x = rand() % (mapWidth - 2);
+		newFoodPosition.y = rand() % (mapHeight - 2);
+	}
 	gameState.foodPosition = newFoodPosition;
 }
 
@@ -71,7 +117,7 @@ void GrowSnake(GameState& gameState)
 	gameState.snake.push_back(newSegment);
 }
 
-void MoveSnake(GameState& gameState)
+void MoveTail(GameState& gameState)
 {
 	Position previousPosition = gameState.snake[0];
 	for (int i = 1; i < gameState.snake.size(); i++)
@@ -87,14 +133,12 @@ void CheckCollision(GameState& gameState)
 	Position head = gameState.snake[0];
 	if (gameState.map[head.x][head.y] == '#')
 	{
-		std::cout << "Game Over! You hit a wall." << std::endl;
 		gameState.gameOver = true;
 	}
 	for (int i = 1; i < gameState.snake.size(); i++)
 	{
 		if (head == gameState.snake[i])
 		{
-			std::cout << "Game Over! You hit yourself." << std::endl;
 			gameState.gameOver = true;
 		}
 	}
@@ -108,7 +152,7 @@ void CheckCollision(GameState& gameState)
 
 void Input(InputState& input)
 {
-	InputState newInput = {false,false,false,false};
+	InputState newInput;
 
 	if (getIfBasicKeyIsCurrentlyDown('W'))
 	{
@@ -134,7 +178,7 @@ void Input(InputState& input)
 
 void Logic(InputState input, GameState& gameState)
 {
-	MoveSnake(gameState);
+	MoveTail(gameState);
 
 	if (input.up || input.down || input.left || input.right)
 	{
@@ -186,68 +230,35 @@ void Render(const GameState& gameState)
 	drawTile(gameState.snake[0].x, gameState.snake[0].y, '@', FOREGROUND_GREEN);
 	for (int i = 1; i < gameState.snake.size(); i++)
 	{
-		drawTile(gameState.snake[i].x, gameState.snake[i].y, 'o');
+		drawTile(gameState.snake[i].x, gameState.snake[i].y, 'o', FOREGROUND_GREEN);
 	}
 	renderBuffer();
 }
 
-void MakeMap(GameState& gameState, int level)
-{
-	int obstacleCount = 0;
-	int mapWidth = gameState.map.size();
-	int mapHeight = gameState.map[0].size();
-
-	if (level > 1)
-	{
-		obstacleCount = level * 5;
-	}
-
-	std::vector<Position> obstacles;
-	for (int i = 0; i < obstacleCount; i++)
-	{
-		Position obstacle;
-		obstacle.x = rand() % (mapWidth - 2);
-		obstacle.y = rand() % (mapHeight - 2);
-		obstacles.push_back(obstacle);
-	}
-
-	for (int x = 0; x < mapWidth; x++)
-	{
-		for (int y = 0; y < mapHeight; y++)
-		{
-			if (x == 0 || x == mapWidth - 1 || y == 0 || y == mapHeight - 1)
-			{
-				gameState.map[x][y] = '#';
-			}
-			else if (std::find(obstacles.begin(), obstacles.end(), Position{ x, y }) != obstacles.end())
-			{
-				gameState.map[x][y] = '#';
-			}
-			else
-			{
-				gameState.map[x][y] = ' ';
-			}
-		}
-	}
-}
-
 void GameLoop(InputState& input, GameState& gameState)
 {
-	int logicTPS = 10;
-	int logicTickDuration = 1000 / logicTPS;
-	int msSinceLogicTick = 0;
+	int logicTPS = 7;
+	int logicTickDuration = 1000000 / logicTPS;
+	std::chrono::duration logicTickDurationChrono = std::chrono::microseconds(logicTickDuration);
+	std::chrono::microseconds msSinceLogicTick (0);
+	std::chrono::steady_clock::time_point lastTime = std::chrono::steady_clock::now();
 	while (!gameState.gameOver)
 	{
+		std::chrono::duration timeSinceLastFrame = std::chrono::steady_clock::now() - lastTime;
+		msSinceLogicTick += std::chrono::duration_cast<std::chrono::microseconds>(timeSinceLastFrame);
+		lastTime = std::chrono::steady_clock::now();
+
 		Input(input);
-		if (msSinceLogicTick >= logicTickDuration)
+		if (msSinceLogicTick >= logicTickDurationChrono)
 		{
-			msSinceLogicTick -= logicTickDuration;
+			msSinceLogicTick -= logicTickDurationChrono;
 			Logic(input, gameState);
 		}
+		else
+		{
+			std::this_thread::sleep_for(logicTickDurationChrono - msSinceLogicTick);
+		}
 		Render(gameState);
-
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-		msSinceLogicTick += 10;
 	}
 }
 
@@ -256,6 +267,7 @@ void StartGame(int level)
 	setupCustomConsole();
 	InputState input;
 	GameState gameState;
+	input.up = true;
 	int mapWidth = 80;
 	int mapHeight = 25;
 	gameState.map.resize(mapWidth, std::vector<char>(mapHeight, ' '));
@@ -271,7 +283,7 @@ void GameOver(const GameState& gameState)
 	clearBuffer();
 	deleteCustomConsole();
 	std::cout << "Game Over! Your score: " << gameState.score << std::endl;
-	std::cout << "Enter level <level> to play again or quit to close the game." << std::endl;
+	std::cout << "Type \"level <level>\" to play again or \"quit\" to close the game." << std::endl;
 
 
 	int level = 1;
