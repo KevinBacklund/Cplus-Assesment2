@@ -170,7 +170,9 @@ void Input(InputState& input)
 	{
 		newInput.right = true;
 	}
-	if (newInput != input) 
+
+	InputState noInput;
+	if (newInput != noInput) 
 	{
 		input = newInput;
 	}
@@ -254,10 +256,7 @@ void GameLoop(InputState& input, GameState& gameState)
 			msSinceLogicTick -= logicTickDurationChrono;
 			Logic(input, gameState);
 		}
-		else
-		{
-			std::this_thread::sleep_for(logicTickDurationChrono - msSinceLogicTick);
-		}
+
 		Render(gameState);
 	}
 }
