@@ -6,7 +6,7 @@
 #include <sstream>
 #include <algorithm>
 #include "console_renderer.h"
-
+#include "ConsoleMenu.h"
 
 struct Position
 {
@@ -282,80 +282,6 @@ void GameOver(const GameState& gameState)
 	clearBuffer();
 	deleteCustomConsole();
 	std::cout << "Game Over! Your score: " << gameState.score << std::endl;
-	std::cout << "Type \"level <level>\" to play again or \"quit\" to close the game." << std::endl;
-
-
-	int level = 1;
-	while (true)
-	{
-		std::string command;
-		std::getline(std::cin, command);
-		std::transform(command.begin(), command.end(), command.begin(), ::toupper);
-		std::istringstream stringStream(command);
-		std::vector<std::string> words;
-		std::string word;
-		while (stringStream >> word)
-		{
-			words.push_back(word);
-		}
-		if (words.empty())
-		{
-			std::cout << "No command entered" << std::endl;
-		}
-		else if (words[0] == "QUIT")
-		{
-			exit(0);
-		}
-		else if (words[0] == "LEVEL")
-		{
-			if (words.size() > 1)
-			{
-				try
-				{
-					level = std::stoi(words[1]);
-				}
-				catch (const std::exception& e)
-				{
-					std::cout << "Invalid level specified. Defaulting to level 1.." << std::endl;
-				}
-				break;
-			}
-		}
-	}
-	std::cout << std::endl;
-	StartGame(level);
+	Menu();
 }
 
-int main(int n, char* args[])
-{
-	int level = 1;
-	if (n > 1)
-	{
-		std::string arg = args[1];
-		if (arg == "level")
-		{
-			if (n > 2)
-			{
-				try
-				{
-					level = std::stoi(args[2]);
-				}
-				catch (const std::exception& e)
-				{
-					std::cout << "Invalid level specified. Defaulting to level 1." << std::endl;
-				}
-			}
-			else
-			{
-				std::cout << "No level specified. Defaulting to level 1." << std::endl;
-			}
-		}
-		else
-		{
-			std::cout << "Unknown argument: " << arg << ". Defaulting to level 1." << std::endl;
-		}
-	}
-	std::cout << "Selected level: " << level << std::endl;
-	
-	StartGame(level);
-}
