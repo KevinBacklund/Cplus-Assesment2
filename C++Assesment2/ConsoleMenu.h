@@ -10,7 +10,7 @@ struct Settings
 };
 
 void Menu(Settings& gameSettings);
-void NavigateMenu(std::vector<std::string>& path, Settings& gameSettings);
+void ProcessCommands(std::vector<std::string>& path, Settings& gameSettings);
 std::string RecieveCommand(std::vector<std::string>& path);
 bool IsValidCommand(std::vector<std::string>& path, std::string& command);
 std::string Capitalize(std::string& str);

@@ -302,6 +302,11 @@ void GameOver(const GameState* gameState)
 		std::getline(std::cin, name);
 		SaveHighscore(gameState->score, gameState->level, name);
 	}
+	else
+	{
+		std::cout << "Press enter to return to main menu...";
+		std::cin.get();
+	}
 	Settings settings = gameState->settings;
 	delete gameState;
 	Menu(settings);
