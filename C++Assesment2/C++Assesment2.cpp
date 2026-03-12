@@ -38,6 +38,7 @@ struct GameState
 	bool gameOver = false;
 	int score = 0;
 	int level = 1;
+	Settings settings;
 };
 
 struct InputState
@@ -219,6 +220,7 @@ void Render(const GameState* gameState)
 {
 	int mapHeight = gameState->map.size();
 	int mapWidth = gameState->map[0].size();
+	unsigned short snakeColour = gameState->settings.snakeColour;
 	std::string score = "Snake Game - Score: " + std::to_string(gameState->score);
 
 	drawString(mapWidth + 3, 3, score);
@@ -231,17 +233,17 @@ void Render(const GameState* gameState)
 		}
 	}
 	drawTile(gameState->foodPosition.x, gameState->foodPosition.y, '*', FOREGROUND_RED);
-	drawTile(gameState->snake[0].x, gameState->snake[0].y, '@', FOREGROUND_GREEN);
+	drawTile(gameState->snake[0].x, gameState->snake[0].y, '@', snakeColour);
 	for (int i = 1; i < gameState->snake.size(); i++)
 	{
-		drawTile(gameState->snake[i].x, gameState->snake[i].y, 'o', FOREGROUND_GREEN);
+		drawTile(gameState->snake[i].x, gameState->snake[i].y, 'o', snakeColour);
 	}
 	renderBuffer();
 }
 
 void GameLoop(InputState& input, GameState* gameState)
 {
-	int logicTPS = 7;
+	int logicTPS = gameState->settings.tickRate;
 	int logicTickDuration = 1000000 / logicTPS;
 	std::chrono::duration logicTickDurationChrono = std::chrono::microseconds(logicTickDuration);
 	std::chrono::microseconds msSinceLogicTick (0);
@@ -263,12 +265,13 @@ void GameLoop(InputState& input, GameState* gameState)
 	}
 }
 
-void StartGame(int level)
+void StartGame(int level, Settings settings)
 {
 	setupCustomConsole();
 	InputState input;
 	GameState *gameState = new GameState;
 	gameState->level = level;
+	gameState->settings = settings;
 	input.up = true;
 	gameState->map = LoadMap(gameState->level);
 	int mapHeight = gameState->map.size();
@@ -299,7 +302,8 @@ void GameOver(const GameState* gameState)
 		std::getline(std::cin, name);
 		SaveHighscore(gameState->score, gameState->level, name);
 	}
+	Settings settings = gameState->settings;
 	delete gameState;
-	Menu();
+	Menu(settings);
 }
 

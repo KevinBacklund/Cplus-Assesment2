@@ -8,34 +8,35 @@
 
 std::map<std::string, std::vector<std::string>> menuOptions = 
 {
-	{ "Main", { "Level select", "Options", "Highscore"}},
-	{ "Options", { "Difficulty"} },
+	{ "Main", { "Level select", "Settings", "Highscore"}},
+	{ "Settings", { "Snake colour", "Tickrate"}},
 	{ "Level select", {}},
 };
 
 int main()
 {
 	int availableLevels = CheckAvailableLevels();
+	Settings gameSettings;
 	for (int i = 1; i <= availableLevels; i++)
 	{
 		menuOptions["Level select"].push_back("Level " + std::to_string(i));
 	}
-	Menu();
+	Menu(gameSettings);
 }
 
-void Menu()
+void Menu(Settings& gameSettings)
 {
 	std::vector<std::string> path;
 	path.push_back("Main");
 
-	NavigateMenu(path);
+	NavigateMenu(path, gameSettings);
 
 	std::cout << "Welcome to the Snake Game!" << std::endl;
 	std::cout << "Press Enter to start..." << std::endl;
 	std::cin.get();
 }
 
-void NavigateMenu(std::vector<std::string>& path)
+void NavigateMenu(std::vector<std::string>& path, Settings& gameSettings)
 {
 	std::string currentMenu = path.back();
 	std::string currentPath;
@@ -50,7 +51,7 @@ void NavigateMenu(std::vector<std::string>& path)
 	if (!IsValidCommand(path, command))
 	{
 		std::cout << "Invalid command, try again." << std::endl;
-		NavigateMenu(path);
+		NavigateMenu(path, gameSettings);
 	}
 
 	if (command == "Quit")
@@ -62,37 +63,80 @@ void NavigateMenu(std::vector<std::string>& path)
 		if (path.size() > 1)
 		{
 			std::vector<std::string> newPath(path.begin(), path.end() - 1);
-			NavigateMenu(newPath);
+			NavigateMenu(newPath, gameSettings);
 		}
 		else
 		{
 			std::cout << "Already at main." << std::endl;
-			NavigateMenu(path);
+			NavigateMenu(path, gameSettings);
 		}
 	}
-	else if (command == "Level 1" || command == "Play")
+	else if (command == "Play")
 	{
-		StartGame(1);
+		StartGame(1, gameSettings);
 	}
-	else if (command == "Level 2")
+	else if (path.back() == "Level select")
 	{
-		StartGame(2);
+		int level = std::stoi(command.substr(command.find(" ") + 1));
+		if (level < 1 || level > menuOptions["Level select"].size())
+		{
+			std::cout << "Invalid level, try again." << std::endl;
+			NavigateMenu(path, gameSettings);
+		}
+		StartGame(level, gameSettings);
 	}
-	else if (command == "Level 3")
+	else if (command == "Snake colour")
 	{
-		StartGame(3);
+		std::cout << "Enter snake colour (Red, Green, Blue): ";
+		std::string colour;
+		std::getline(std::cin, colour);
+		colour = Capitalize(colour);
+		if (colour == "Red")
+		{
+			gameSettings.snakeColour = FOREGROUND_RED;
+		}
+		else if (colour == "Green")
+		{
+			gameSettings.snakeColour = FOREGROUND_GREEN;
+		}
+		else if (colour == "Blue")
+		{
+			gameSettings.snakeColour = FOREGROUND_BLUE;
+		}
+		else
+		{
+			std::cout << "Invalid colour, try again." << std::endl;
+			NavigateMenu(path, gameSettings);
+		}
+		std::cout << "Snake colour set to " << colour << "." << std::endl;
+		NavigateMenu(path, gameSettings);
+	}
+	else if (command == "Tickrate")
+	{
+		std::cout << "Enter tickrate (1-20): ";
+		std::string tickrateStr;
+		std::getline(std::cin, tickrateStr);
+		int tickrate = std::stoi(tickrateStr);
+		if (tickrate < 1 || tickrate > 20)
+		{
+			std::cout << "Invalid tickrate, try again." << std::endl;
+			NavigateMenu(path, gameSettings);
+		}
+		gameSettings.tickRate = tickrate;
+		std::cout << "Tickrate set to " << tickrate << "." << std::endl;
+		NavigateMenu(path, gameSettings);
 	}
 	else if (command == "Highscore")
 	{
 		std::vector<std::vector<std::string>> highscores = LoadHighscore();
 		ShowHighscores(highscores, -1);
-		NavigateMenu(path);
+		NavigateMenu(path, gameSettings);
 	}
 	else
 	{
 		std::vector<std::string> newPath(path);
 		newPath.push_back(command);
-		NavigateMenu(newPath);
+		NavigateMenu(newPath, gameSettings);
 	}
 }
 
@@ -281,3 +325,4 @@ std::vector<std::vector<char>> LoadMap(int level)
 	}
 	return map;
 }
+
